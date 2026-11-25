@@ -748,6 +748,7 @@ body.zonderprijzen .metprijs{display:none!important}
 .glist{display:grid;border-top:1px solid var(--n500)}
 .grow{display:grid;grid-template-columns:1fr auto 32px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--n500)}
 .gwie{display:grid;min-width:0}.gwie b{font-weight:500;font-size:14px}.gwie small{font-size:11px;color:var(--g400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gapps{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:12px}.gapps label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}.gapps input{margin:0;accent-color:#3A3A3A}
 .grow select{height:36px;padding:0 6px;font-size:13px;line-height:1.2}
 .gdel{width:32px;height:32px;border:1px solid var(--n500);background:#fff;font-size:18px;line-height:1;color:#B3261E}
 .modal form.gform{padding:12px 0 0;gap:8px;max-width:none;background:none}
@@ -3302,9 +3303,15 @@ async function laadGebruikers(){
   const box=$('gList'); const {data,error}=await window.blomRpc('gebruikers_lijst');
   if(error){ box.innerHTML='<p class="note fout">'+esc(gFout(error))+'</p>'; return; }
   const ik=(window.BLOM_USER&&BLOM_USER.email||'').toLowerCase();
-  box.innerHTML=(data||[]).map(g=>'<div class="grow"><div class="gwie"><b>'+esc(g.naam||g.email.split('@')[0])+(g.email===ik?' <small>(jij)</small>':'')+'</b><small>'+esc(g.email)+' · '+(g.laatst_ingelogd?'laatst ingelogd '+new Date(g.laatst_ingelogd).toLocaleDateString('nl-NL'):'nog niet ingelogd')+'</small></div>'
+  // zichtbaarheid per app (schema gebruikersbeheer): beheerders zien altijd alles
+  const zr=await window.blomRpc('zichtbaarheid_lijst'); const ZA=(zr&&!zr.error&&zr.data&&zr.data.apps)||[], ZZ=(zr&&!zr.error&&zr.data&&zr.data.zichtbaar)||{};
+  const gApps=g=>ZA.length?'<span class="gapps">'+ZA.map(a=>{ const beh=g.rol==='beheerder'; return '<label'+(beh?' title="Beheerders zien alle apps"':'')+'><input type="checkbox" data-gapp="'+esc(g.email)+'|'+esc(a.code)+'"'+(beh||(ZZ[g.email]||[]).includes(a.code)?' checked':'')+(beh?' disabled':'')+'> '+esc(a.naam)+'</label>'; }).join('')+'</span>':'';
+  box.innerHTML=(data||[]).map(g=>'<div class="grow"><div class="gwie"><b>'+esc(g.naam||g.email.split('@')[0])+(g.email===ik?' <small>(jij)</small>':'')+'</b><small>'+esc(g.email)+' · '+(g.laatst_ingelogd?'laatst ingelogd '+new Date(g.laatst_ingelogd).toLocaleDateString('nl-NL'):'nog niet ingelogd')+'</small>'+gApps(g)+'</div>'
     +'<select data-grol="'+esc(g.email)+'" aria-label="Rol van '+esc(g.email)+'">'+Object.entries(ROLN).map(([k,l])=>'<option value="'+k+'"'+(g.rol===k?' selected':'')+'>'+l+'</option>').join('')+'</select>'
     +(g.email===ik?'<span class="gdel"></span>':'<button type="button" class="gdel" data-gdel="'+esc(g.email)+'" aria-label="'+esc(g.email)+' verwijderen" title="Verwijderen">×</button>')+'</div>').join('')||'<p class="note">Nog geen gebruikers.</p>';
+  box.querySelectorAll('[data-gapp]').forEach(cb=>cb.onchange=async()=>{ const [em,app]=cb.dataset.gapp.split('|'); const a=ZA.find(x=>x.code===app); cb.disabled=true;
+    const {error}=await window.blomRpc('zichtbaarheid_zet',{p_email:em,p_app:app,p_zichtbaar:cb.checked});
+    if(error){ gMsg(gFout(error),true); } else gMsg(em+' ziet '+(a?a.naam:app)+' nu '+(cb.checked?'wel':'niet')+'.'); laadGebruikers(); });
   box.querySelectorAll('[data-grol]').forEach(sel=>sel.onchange=async()=>{ const g=(data||[]).find(x=>x.email===sel.dataset.grol); const {error}=await window.blomRpc('gebruiker_zet',{p_email:g.email,p_naam:g.naam||'',p_rol:sel.value});
     if(error){ gMsg(gFout(error),true); } else gMsg(g.email+' is nu '+ROLN[sel.value]+'.'); laadGebruikers(); });
   // verwijderen: van de lijst én het inlogaccount in Supabase (Edge Function account-verwijderen); keuzes blijven bewaard
