@@ -748,6 +748,7 @@ body.zonderprijzen .metprijs{display:none!important}
 .glist{display:grid;border-top:1px solid var(--n500)}
 .grow{display:grid;grid-template-columns:1fr auto 32px;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--n500)}
 .gwie{display:grid;min-width:0}.gwie b{font-weight:500;font-size:14px}.gwie small{font-size:11px;color:var(--g400);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gapps{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:4px;font-size:12px}.gapps label{display:inline-flex;align-items:center;gap:5px;cursor:pointer}.gapps input{margin:0;accent-color:#3A3A3A}
 .grow select{height:36px;padding:0 6px;font-size:13px;line-height:1.2}
 .gdel{width:32px;height:32px;border:1px solid var(--n500);background:#fff;font-size:18px;line-height:1;color:#B3261E}
 .modal form.gform{padding:12px 0 0;gap:8px;max-width:none;background:none}
@@ -1290,14 +1291,14 @@ body.swv #what{display:none}
 <div class="modal" id="usersModal" hidden>
   <div class="box gbox">
     <div class="ghead"><h2>Gebruikers</h2><button type="button" class="gx" id="usersClose" aria-label="Sluiten">×</button></div>
-    <p class="note">Alleen wie hier staat, kan inloggen. Vul je bij het toevoegen een wachtwoord in, dan wordt het account meteen aangemaakt: geef het wachtwoord zelf door, bij de eerste keer inloggen kiest de persoon een eigen wachtwoord. Laat je het leeg, dan logt de persoon de eerste keer in met een inloglink op zijn eigen e-mailadres. Bij een bestaand account vervangt een ingevuld wachtwoord het oude. Verwijderen (×) haalt ook het account weg; gemaakte keuzes blijven bewaard.<br><b>Beheerder</b>: ziet resultaten, kan exporteren en keuzes onbeperkt aanpassen. <b>Beoordelaar</b>: doet elke leverancier één keer en ziet geen resultaten. <b>Beoordelaar zonder prijzen</b>: als beoordelaar, maar ziet geen prijzen.</p>
+    <p class="note">Alleen wie hier staat, kan inloggen. Bij het toevoegen wordt het account meteen aangemaakt met het standaardwachtwoord, of met het wachtwoord dat je invult. Geef het wachtwoord zelf door; bij de eerste keer inloggen moet de persoon een eigen wachtwoord kiezen. Voeg je iemand toe die al een account heeft, dan wordt het wachtwoord opnieuw ingesteld. Met de vinkjes bepaal je welke andere apps iemand ziet; <b>Geen Collectiekeuze</b> is een account zonder toegang tot de Collectiekeuze. Verwijderen (×) haalt ook het account weg; gemaakte keuzes blijven bewaard.<br><b>Beheerder</b>: ziet resultaten, kan exporteren en keuzes onbeperkt aanpassen. <b>Beoordelaar</b>: doet elke leverancier één keer en ziet geen resultaten. <b>Beoordelaar zonder prijzen</b>: als beoordelaar, maar ziet geen prijzen.</p>
     <div class="glist" id="gList"><p class="note">Laden…</p></div>
     <form id="gForm" class="gform" autocomplete="off">
       <b>Gebruiker toevoegen</b>
       <input id="gEmail" type="email" placeholder="naam@blominterieurs.nl" required>
       <input id="gNaam" type="text" placeholder="Naam (optioneel)">
-      <div class="gww"><input id="gWw" type="text" placeholder="Tijdelijk wachtwoord (optioneel, min. 8 tekens)" autocomplete="off" spellcheck="false" minlength="8"><button type="button" id="gWwNieuw">Voorstel</button></div>
-      <div class="grol"><label><input type="radio" name="gRol" value="beoordelaar" checked> Beoordelaar</label><label><input type="radio" name="gRol" value="beoordelaar_zonder_prijzen"> Beoordelaar zonder prijzen</label><label><input type="radio" name="gRol" value="beheerder"> Beheerder</label></div>
+      <div class="gww"><input id="gWw" type="text" placeholder="Wachtwoord (leeg = standaardwachtwoord)" autocomplete="off" spellcheck="false" minlength="8"><button type="button" id="gWwNieuw">Voorstel</button></div>
+      <div class="grol"><label><input type="radio" name="gRol" value="beoordelaar" checked> Beoordelaar</label><label><input type="radio" name="gRol" value="beoordelaar_zonder_prijzen"> Beoordelaar zonder prijzen</label><label><input type="radio" name="gRol" value="beheerder"> Beheerder</label><label><input type="radio" name="gRol" value="geen"> Geen Collectiekeuze</label></div>
       <button class="cta" type="submit">Toevoegen</button>
       <p class="note gmsg" id="gMsg"></p>
     </form>
@@ -3295,16 +3296,22 @@ function afronden(){ if(BEH()||!SUP||!me||!window.blomRpc||canShare===false) ret
   if(writing||Object.keys(pending).length){ setTimeout(afronden,600); return; }
   AFGEROND[id]=1; window.blomRpc('keuze_afronden',{p_id:docId(),p_versie:(window.BLOM_CONFIG&&BLOM_CONFIG.versie)||'v1'}).then(r=>{ if(r&&r.error) AFGEROND[id]=0; }); }
 /* ---------------- gebruikersbeheer (beheerder) ---------------- */
-const ROLN={beheerder:'Beheerder',beoordelaar:'Beoordelaar',beoordelaar_zonder_prijzen:'Beoordelaar zonder prijzen'};
+const ROLN={beheerder:'Beheerder',beoordelaar:'Beoordelaar',beoordelaar_zonder_prijzen:'Beoordelaar zonder prijzen',geen:'Geen Collectiekeuze'};
 const gMsg=(t,fout)=>{ const e=$('gMsg'); e.textContent=t||''; e.classList.toggle('fout',!!fout); };
 const gFout=e=>{ const m=(e&&(e.message||e.details))||'onbekende fout'; return /not_granted|permission/i.test(m)?'Alleen een beheerder kan gebruikers beheren.':m; };
 async function laadGebruikers(){
   const box=$('gList'); const {data,error}=await window.blomRpc('gebruikers_lijst');
   if(error){ box.innerHTML='<p class="note fout">'+esc(gFout(error))+'</p>'; return; }
   const ik=(window.BLOM_USER&&BLOM_USER.email||'').toLowerCase();
-  box.innerHTML=(data||[]).map(g=>'<div class="grow"><div class="gwie"><b>'+esc(g.naam||g.email.split('@')[0])+(g.email===ik?' <small>(jij)</small>':'')+'</b><small>'+esc(g.email)+' · '+(g.laatst_ingelogd?'laatst ingelogd '+new Date(g.laatst_ingelogd).toLocaleDateString('nl-NL'):'nog niet ingelogd')+'</small></div>'
+  // zichtbaarheid per app (schema gebruikersbeheer): beheerders zien altijd alles
+  const zr=await window.blomRpc('zichtbaarheid_lijst'); const ZA=(zr&&!zr.error&&zr.data&&zr.data.apps)||[], ZZ=(zr&&!zr.error&&zr.data&&zr.data.zichtbaar)||{};
+  const gApps=g=>ZA.length?'<span class="gapps">'+ZA.map(a=>{ const beh=g.rol==='beheerder'; return '<label'+(beh?' title="Beheerders zien alle apps"':'')+'><input type="checkbox" data-gapp="'+esc(g.email)+'|'+esc(a.code)+'"'+(beh||(ZZ[g.email]||[]).includes(a.code)?' checked':'')+(beh?' disabled':'')+'> '+esc(a.naam)+'</label>'; }).join('')+'</span>':'';
+  box.innerHTML=(data||[]).map(g=>'<div class="grow"><div class="gwie"><b>'+esc(g.naam||g.email.split('@')[0])+(g.email===ik?' <small>(jij)</small>':'')+'</b><small>'+esc(g.email)+' · '+(g.laatst_ingelogd?'laatst ingelogd '+new Date(g.laatst_ingelogd).toLocaleDateString('nl-NL'):'nog niet ingelogd')+'</small>'+gApps(g)+'</div>'
     +'<select data-grol="'+esc(g.email)+'" aria-label="Rol van '+esc(g.email)+'">'+Object.entries(ROLN).map(([k,l])=>'<option value="'+k+'"'+(g.rol===k?' selected':'')+'>'+l+'</option>').join('')+'</select>'
     +(g.email===ik?'<span class="gdel"></span>':'<button type="button" class="gdel" data-gdel="'+esc(g.email)+'" aria-label="'+esc(g.email)+' verwijderen" title="Verwijderen">×</button>')+'</div>').join('')||'<p class="note">Nog geen gebruikers.</p>';
+  box.querySelectorAll('[data-gapp]').forEach(cb=>cb.onchange=async()=>{ const [em,app]=cb.dataset.gapp.split('|'); const a=ZA.find(x=>x.code===app); cb.disabled=true;
+    const {error}=await window.blomRpc('zichtbaarheid_zet',{p_email:em,p_app:app,p_zichtbaar:cb.checked});
+    if(error){ gMsg(gFout(error),true); } else gMsg(em+' ziet '+(a?a.naam:app)+' nu '+(cb.checked?'wel':'niet')+'.'); laadGebruikers(); });
   box.querySelectorAll('[data-grol]').forEach(sel=>sel.onchange=async()=>{ const g=(data||[]).find(x=>x.email===sel.dataset.grol); const {error}=await window.blomRpc('gebruiker_zet',{p_email:g.email,p_naam:g.naam||'',p_rol:sel.value});
     if(error){ gMsg(gFout(error),true); } else gMsg(g.email+' is nu '+ROLN[sel.value]+'.'); laadGebruikers(); });
   // verwijderen: van de lijst én het inlogaccount in Supabase (Edge Function account-verwijderen); keuzes blijven bewaard
@@ -3321,13 +3328,12 @@ $('gForm').addEventListener('submit',async e=>{ e.preventDefault(); const em=$('
   if(!/^[^@\s]+@blominterieurs\.nl$/.test(em)){ gMsg('Gebruik een @blominterieurs.nl-adres.',true); return; }
   if(ww&&ww.length<8){ gMsg('Het wachtwoord moet minimaal 8 tekens hebben.',true); $('gWw').focus(); return; }
   const knop=$('gForm').querySelector('button[type=submit]'); knop.disabled=true;
-  // met wachtwoord: account meteen aanmaken (Edge Function account-aanmaken, zet de persoon ook op de lijst)
-  const {data,error}=ww?await window.blomFunctie('account-aanmaken',{email:em,naam:nm,rol,wachtwoord:ww}):await window.blomRpc('gebruiker_zet',{p_email:em,p_naam:nm,p_rol:rol});
+  // account meteen aanmaken (Edge Function account-aanmaken, zet de persoon ook op de lijst); zonder wachtwoord: het standaardwachtwoord
+  const {data,error}=await window.blomFunctie('account-aanmaken',ww?{email:em,naam:nm,rol,wachtwoord:ww}:{email:em,naam:nm,rol});
   knop.disabled=false;
   if(error){ gMsg(gFout(error)+(data&&data.lijst?' (wel op de lijst gezet als '+ROLN[rol]+')':''),true); if(data&&data.lijst) laadGebruikers(); return; }
-  gMsg(!ww?em+' toegevoegd als '+ROLN[rol]+'. Deze persoon kan nu inloggen via het inlogscherm met een inloglink.'
-    :data&&data.nieuw===false?em+' is '+ROLN[rol]+' en heeft een nieuw wachtwoord. Geef het zelf door; bij de eerste keer inloggen kiest de persoon een eigen wachtwoord.'
-    :'Account voor '+em+' aangemaakt als '+ROLN[rol]+'. Geef het wachtwoord zelf door; bij de eerste keer inloggen kiest de persoon een eigen wachtwoord.');
+  const welk=ww?'het ingevulde wachtwoord':'het standaardwachtwoord';
+  gMsg((data&&data.nieuw===false?em+' is '+ROLN[rol]+' en heeft opnieuw '+welk+' gekregen.':'Account voor '+em+' aangemaakt als '+ROLN[rol]+', met '+welk+'.')+' Geef het zelf door; bij de eerste keer inloggen kiest de persoon een eigen wachtwoord.');
   $('gEmail').value=''; $('gNaam').value=''; $('gWw').value=''; laadGebruikers(); });
 let afterName=null;
 const VASTE_GEBRUIKERS=['Jan','Johan','Test'];

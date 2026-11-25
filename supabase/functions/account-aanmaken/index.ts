@@ -5,12 +5,14 @@
 //     eindigt en of de rol bestaat. Lukt dat niet, dan gebeurt er verder niets.
 //  2. maakt het account aan met dat wachtwoord (e-mailadres meteen bevestigd, geen mail). Bestaat het account
 //     al, dan wordt het wachtwoord overschreven.
+// Zonder ingevuld wachtwoord krijgt het account het standaardwachtwoord. Elke keer komt er een regel in het wachtwoordlog.
 // Het account krijgt de vlag wachtwoord_wijzigen: bij de eerste keer inloggen moet de persoon zelf een nieuw
 // wachtwoord kiezen. Zo kent alleen hij het wachtwoord waarmee hij daarna inlogt.
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 
 const DOMEIN = "@blominterieurs.nl";
-const ROLLEN = ["beheerder", "beoordelaar", "beoordelaar_zonder_prijzen"];
+// "geen": account zonder Collectiekeuze (toegang tot andere apps stel je in met de vinkjes)
+const ROLLEN = ["beheerder", "beoordelaar", "beoordelaar_zonder_prijzen", "geen"];
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -31,9 +33,12 @@ Deno.serve(async (req) => {
   const email = String(inv.email || "").trim().toLowerCase();
   const naam = String(inv.naam || "").trim();
   const rol = String(inv.rol || "");
-  const wachtwoord = String(inv.wachtwoord || "");
+  // zonder ingevuld wachtwoord krijgt het account het standaardwachtwoord (geheim STANDAARD_WACHTWOORD in Supabase)
+  const standaard = !inv.wachtwoord;
+  const wachtwoord = String(inv.wachtwoord || Deno.env.get("STANDAARD_WACHTWOORD") || "");
   if (!/^[^@\s]+@blominterieurs\.nl$/.test(email)) return antwoord(400, { error: "Gebruik een " + DOMEIN + "-adres." });
   if (!ROLLEN.includes(rol)) return antwoord(400, { error: "Onbekende rol." });
+  if (!wachtwoord) return antwoord(400, { error: "Er is nog geen standaardwachtwoord ingesteld. Vul een wachtwoord in, of stel in Supabase het geheim STANDAARD_WACHTWOORD in." });
   if (wachtwoord.length < 8) return antwoord(400, { error: "Het wachtwoord moet minimaal 8 tekens hebben." });
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -62,7 +67,11 @@ Deno.serve(async (req) => {
   const { error: maakFout } = await beheer.auth.admin.createUser({
     email, password: wachtwoord, email_confirm: true, user_metadata: meta,
   });
-  if (!maakFout) return antwoord(200, { email, nieuw: true });
+  // wachtwoordlog: wie heeft wanneer een wachtwoord ingesteld (nooit het wachtwoord zelf)
+  const log = () => beheer.rpc("wachtwoord_log_schrijf", {
+    p_email: email, p_gebeurtenis: standaard ? "standaardwachtwoord ingesteld" : "wachtwoord door beheerder ingesteld", p_door: wie.user.email,
+  }).then(() => {}, () => {});
+  if (!maakFout) { await log(); return antwoord(200, { email, nieuw: true, standaard }); }
 
   const bestaat = (maakFout as { code?: string }).code === "email_exists" || /already been registered|already exists/i.test(maakFout.message);
   if (!bestaat) return antwoord(400, { error: wwFout(maakFout.message), lijst: true });
@@ -73,7 +82,8 @@ Deno.serve(async (req) => {
     password: wachtwoord, email_confirm: true, user_metadata: meta,
   });
   if (zetFout) return antwoord(400, { error: wwFout(zetFout.message), lijst: true });
-  return antwoord(200, { email, nieuw: false });
+  await log();
+  return antwoord(200, { email, nieuw: false, standaard });
 });
 
 // klein aantal accounts: doorzoek de lijst per 1000
