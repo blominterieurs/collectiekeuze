@@ -305,6 +305,7 @@
           : /same|different from the old/i.test(error.message) ? 'Dit is je huidige wachtwoord. Kies een ander.'
           : 'Opslaan lukte niet: ' + error.message);
       }
+      sb.rpc('wachtwoord_gewijzigd').then(() => {}, () => {});   // wachtwoordlog: zelf gewijzigd
       if (data && data.user) window.BLOM_USER = data.user;
       scherm.innerHTML = `<form novalidate><span class="eye">Blom Collectiekeuze</span><h1>Wachtwoord opgeslagen</h1>
         <p>Log voortaan op elk apparaat in met <b>${esc(window.BLOM_USER.email)}</b> en dit wachtwoord.</p>

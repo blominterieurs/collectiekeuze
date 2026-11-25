@@ -1291,14 +1291,14 @@ body.swv #what{display:none}
 <div class="modal" id="usersModal" hidden>
   <div class="box gbox">
     <div class="ghead"><h2>Gebruikers</h2><button type="button" class="gx" id="usersClose" aria-label="Sluiten">×</button></div>
-    <p class="note">Alleen wie hier staat, kan inloggen. Vul je bij het toevoegen een wachtwoord in, dan wordt het account meteen aangemaakt: geef het wachtwoord zelf door, bij de eerste keer inloggen kiest de persoon een eigen wachtwoord. Laat je het leeg, dan logt de persoon de eerste keer in met een inloglink op zijn eigen e-mailadres. Bij een bestaand account vervangt een ingevuld wachtwoord het oude. Verwijderen (×) haalt ook het account weg; gemaakte keuzes blijven bewaard.<br><b>Beheerder</b>: ziet resultaten, kan exporteren en keuzes onbeperkt aanpassen. <b>Beoordelaar</b>: doet elke leverancier één keer en ziet geen resultaten. <b>Beoordelaar zonder prijzen</b>: als beoordelaar, maar ziet geen prijzen.</p>
+    <p class="note">Alleen wie hier staat, kan inloggen. Bij het toevoegen wordt het account meteen aangemaakt met het standaardwachtwoord, of met het wachtwoord dat je invult. Geef het wachtwoord zelf door; bij de eerste keer inloggen moet de persoon een eigen wachtwoord kiezen. Voeg je iemand toe die al een account heeft, dan wordt het wachtwoord opnieuw ingesteld. Met de vinkjes bepaal je welke andere apps iemand ziet; <b>Geen Collectiekeuze</b> is een account zonder toegang tot de Collectiekeuze. Verwijderen (×) haalt ook het account weg; gemaakte keuzes blijven bewaard.<br><b>Beheerder</b>: ziet resultaten, kan exporteren en keuzes onbeperkt aanpassen. <b>Beoordelaar</b>: doet elke leverancier één keer en ziet geen resultaten. <b>Beoordelaar zonder prijzen</b>: als beoordelaar, maar ziet geen prijzen.</p>
     <div class="glist" id="gList"><p class="note">Laden…</p></div>
     <form id="gForm" class="gform" autocomplete="off">
       <b>Gebruiker toevoegen</b>
       <input id="gEmail" type="email" placeholder="naam@blominterieurs.nl" required>
       <input id="gNaam" type="text" placeholder="Naam (optioneel)">
-      <div class="gww"><input id="gWw" type="text" placeholder="Tijdelijk wachtwoord (optioneel, min. 8 tekens)" autocomplete="off" spellcheck="false" minlength="8"><button type="button" id="gWwNieuw">Voorstel</button></div>
-      <div class="grol"><label><input type="radio" name="gRol" value="beoordelaar" checked> Beoordelaar</label><label><input type="radio" name="gRol" value="beoordelaar_zonder_prijzen"> Beoordelaar zonder prijzen</label><label><input type="radio" name="gRol" value="beheerder"> Beheerder</label></div>
+      <div class="gww"><input id="gWw" type="text" placeholder="Wachtwoord (leeg = standaardwachtwoord)" autocomplete="off" spellcheck="false" minlength="8"><button type="button" id="gWwNieuw">Voorstel</button></div>
+      <div class="grol"><label><input type="radio" name="gRol" value="beoordelaar" checked> Beoordelaar</label><label><input type="radio" name="gRol" value="beoordelaar_zonder_prijzen"> Beoordelaar zonder prijzen</label><label><input type="radio" name="gRol" value="beheerder"> Beheerder</label><label><input type="radio" name="gRol" value="geen"> Geen Collectiekeuze</label></div>
       <button class="cta" type="submit">Toevoegen</button>
       <p class="note gmsg" id="gMsg"></p>
     </form>
@@ -3296,7 +3296,7 @@ function afronden(){ if(BEH()||!SUP||!me||!window.blomRpc||canShare===false) ret
   if(writing||Object.keys(pending).length){ setTimeout(afronden,600); return; }
   AFGEROND[id]=1; window.blomRpc('keuze_afronden',{p_id:docId(),p_versie:(window.BLOM_CONFIG&&BLOM_CONFIG.versie)||'v1'}).then(r=>{ if(r&&r.error) AFGEROND[id]=0; }); }
 /* ---------------- gebruikersbeheer (beheerder) ---------------- */
-const ROLN={beheerder:'Beheerder',beoordelaar:'Beoordelaar',beoordelaar_zonder_prijzen:'Beoordelaar zonder prijzen'};
+const ROLN={beheerder:'Beheerder',beoordelaar:'Beoordelaar',beoordelaar_zonder_prijzen:'Beoordelaar zonder prijzen',geen:'Geen Collectiekeuze'};
 const gMsg=(t,fout)=>{ const e=$('gMsg'); e.textContent=t||''; e.classList.toggle('fout',!!fout); };
 const gFout=e=>{ const m=(e&&(e.message||e.details))||'onbekende fout'; return /not_granted|permission/i.test(m)?'Alleen een beheerder kan gebruikers beheren.':m; };
 async function laadGebruikers(){
@@ -3328,13 +3328,12 @@ $('gForm').addEventListener('submit',async e=>{ e.preventDefault(); const em=$('
   if(!/^[^@\s]+@blominterieurs\.nl$/.test(em)){ gMsg('Gebruik een @blominterieurs.nl-adres.',true); return; }
   if(ww&&ww.length<8){ gMsg('Het wachtwoord moet minimaal 8 tekens hebben.',true); $('gWw').focus(); return; }
   const knop=$('gForm').querySelector('button[type=submit]'); knop.disabled=true;
-  // met wachtwoord: account meteen aanmaken (Edge Function account-aanmaken, zet de persoon ook op de lijst)
-  const {data,error}=ww?await window.blomFunctie('account-aanmaken',{email:em,naam:nm,rol,wachtwoord:ww}):await window.blomRpc('gebruiker_zet',{p_email:em,p_naam:nm,p_rol:rol});
+  // account meteen aanmaken (Edge Function account-aanmaken, zet de persoon ook op de lijst); zonder wachtwoord: het standaardwachtwoord
+  const {data,error}=await window.blomFunctie('account-aanmaken',ww?{email:em,naam:nm,rol,wachtwoord:ww}:{email:em,naam:nm,rol});
   knop.disabled=false;
   if(error){ gMsg(gFout(error)+(data&&data.lijst?' (wel op de lijst gezet als '+ROLN[rol]+')':''),true); if(data&&data.lijst) laadGebruikers(); return; }
-  gMsg(!ww?em+' toegevoegd als '+ROLN[rol]+'. Deze persoon kan nu inloggen via het inlogscherm met een inloglink.'
-    :data&&data.nieuw===false?em+' is '+ROLN[rol]+' en heeft een nieuw wachtwoord. Geef het zelf door; bij de eerste keer inloggen kiest de persoon een eigen wachtwoord.'
-    :'Account voor '+em+' aangemaakt als '+ROLN[rol]+'. Geef het wachtwoord zelf door; bij de eerste keer inloggen kiest de persoon een eigen wachtwoord.');
+  const welk=ww?'het ingevulde wachtwoord':'het standaardwachtwoord';
+  gMsg((data&&data.nieuw===false?em+' is '+ROLN[rol]+' en heeft opnieuw '+welk+' gekregen.':'Account voor '+em+' aangemaakt als '+ROLN[rol]+', met '+welk+'.')+' Geef het zelf door; bij de eerste keer inloggen kiest de persoon een eigen wachtwoord.');
   $('gEmail').value=''; $('gNaam').value=''; $('gWw').value=''; laadGebruikers(); });
 let afterName=null;
 const VASTE_GEBRUIKERS=['Jan','Johan','Test'];
