@@ -3322,7 +3322,8 @@ async function laadGebruikers(){
     b.disabled=true; const {data,error}=await window.blomFunctie('account-verwijderen',{email:e});
     if(error) gMsg(gFout(error),true); else gMsg(e+' verwijderd'+(data&&data.account===false?' (had nog geen account).':', ook het account.')); laadGebruikers(); });
 }
-$('mUsers').onclick=()=>{ $('menu').hidden=true; $('usersModal').hidden=false; gMsg(''); laadGebruikers(); };
+// gebruikersbeheer staat centraal op de startpagina
+$('mUsers').onclick=()=>{ location.href='https://blominterieurs.github.io/#gebruikers'; };
 $('usersClose').onclick=()=>$('usersModal').hidden=true;
 // voorstel voor een tijdelijk wachtwoord: 12 tekens zonder letters die op elkaar lijken (0/O, 1/l/I)
 $('gWwNieuw').onclick=()=>{ const t='abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789', r=new Uint32Array(12); crypto.getRandomValues(r);
