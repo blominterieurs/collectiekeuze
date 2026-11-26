@@ -1173,6 +1173,12 @@ body.swv #what{display:none}
 .mlh .eye{min-width:0}
 .mhint{margin:6px 0 0;text-align:center;font-size:11.5px;color:var(--g400)}
 .mcard .dvis{border-top:1px solid var(--n500)}
+/* vastgeplakte fotokaart ingeklapt tijdens scrollen: regel met code en labels weg, foto lager (stap 1 en stap 2) */
+.s1k.kl .s2cap,.s1k.kl .fmeld,.s1k.kl .s1zij{display:none}
+.ssoort>.s1k.kl .s1foto{height:170px!important}
+.s2b>.s1k.kl{flex:none}.s2b>.s1k.kl>.s2foto{flex:none;height:170px;min-height:0}
+.s1k.kl .s1foto img,.s1k.kl .s2foto img{top:8px!important;bottom:8px;height:calc(100% - 16px)!important}
+.s1k.kl .s1foto .dzoom{bottom:6px;right:46px}
 /* telefoon: geen vastgeplakte fotokaart en in stap 2 schuift alles mee behalve de knoppen, anders blijft er op een telefoon maar een smalle strook over om te scrollen */
 @media (max-width:560px){
   .ssoort>.s1k{position:relative;top:auto;box-shadow:none;clip-path:none}
@@ -2067,6 +2073,14 @@ function setVi(m,i){
   const sec=$('sSwipe'), keep=$('main').scrollTop;
   sec.innerHTML=cardHTML(m); bindCard(m); $('main').scrollTop=keep;
 }
+// Fotokaart inklappen zodra je in de scroller (main bij stap 1, s2b bij stap 2) naar beneden scrolt; bovenaan weer uitklappen.
+// Het hoogteverschil komt als marge onder de kaart, zodat de inhoud eronder niet verspringt en het scrollen niet heen en weer klapt.
+function klapCheck(sc,k){ if(!sc||!k||!k.isConnected) return; if(getComputedStyle(k).position!=='sticky'){ if(k.classList.contains('kl')){ k.classList.remove('kl'); k.style.marginBottom=''; } return; }
+  const t=sc.scrollTop, kl=k.classList.contains('kl');
+  if(!kl&&t>30){ const h0=k.offsetHeight; k.classList.add('kl'); k.style.marginBottom=Math.max(0,h0-k.offsetHeight)+'px'; }
+  else if(kl&&t<8){ k.classList.remove('kl'); k.style.marginBottom=''; } }
+const klapStap1=()=>klapCheck($('main'),view==='swipe'&&$('sSwipe').querySelector('.ssoort>.s1k'));
+function klapStap2(){ const sb=$('s2b'); if(!sb) return; if(!sb._kl){ sb._kl=1; sb.addEventListener('scroll',()=>klapCheck(sb,sb.querySelector(':scope>.s1k')),{passive:true}); } klapCheck(sb,sb.querySelector(':scope>.s1k')); }
 // alles boven de vouw laten passen: de foto krijgt de hoogte die overblijft (tussen 150 en 380 px)
 function fitFotoMeld(box){ const n=box&&box.querySelector('.fmeld'), im=box&&box.querySelector('img'); if(!n||!im) return;
   im.style.height=''; const top=parseFloat(getComputedStyle(im).top)||0, onder=box.getBoundingClientRect().bottom-n.getBoundingClientRect().top+4; im.style.height='calc(100% - '+Math.round(top+onder)+'px)'; }
@@ -2108,7 +2122,7 @@ function updPbar(m){ const pb=$('pbar'), ac=$('actions'); if(!pb) return;
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&hbOpen&&$('hbp')&&$('zoom').hidden){ e.preventDefault(); e.stopImmediatePropagation(); hbOpen=false; if(S2&&!$('s2').hidden) renderS2(); else updPbar(cur); } },true);
 function bindCard(m){
   updPbar(m);   // eerst de prijsregel: die bepaalt hoeveel ruimte er boven de vouw overblijft
-  const fo=$('sSwipe').querySelector('.fold'); if(fo) fitFold(fo);
+  const fo=$('sSwipe').querySelector('.fold'); if(fo) fitFold(fo); klapStap1();
   const sp=$('strip'), g=grpOf(m,curVi), pos=g.pk.indexOf(m.v[curVi].p);
   clearTimeout(stripT);
   if(sp){
@@ -3087,7 +3101,9 @@ function renderS2(alleenHtml){ if(!S2) return; if(!S2.uz) S2.uz=[]; const {m,b,g
       +(pc&&S2.um?'<div class="dkeys"><span><kbd>spatie</kbd> in of uit de uitzondering</span><span><kbd>Enter</kbd> uitzondering klaar</span><span><kbd>Esc</kbd> annuleren</span></div>':pc?'<div class="dkeys"><span><kbd>Enter</kbd> opslaan</span><span><kbd>Del</kbd> '+esc(plk)+' niet houden</span><span><kbd>⌫</kbd> laatste wijziging terug</span><span><kbd>spatie</kbd> vinkje</span><span><kbd>← →</kbd> uitvoering</span></div>':'')
     +'</div>';
   if(alleenHtml) return H;
-  $('s2').innerHTML=H;
+  // zelfde soort opnieuw tekenen (vinkje, andere uitvoering): scrollpositie houden, zodat de ingeklapte fotokaart ingeklapt blijft
+  const sb0=renderS2._s===S2&&$('s2b'), keepS=sb0?sb0.scrollTop:0; renderS2._s=S2;
+  $('s2').innerHTML=H; if(keepS&&$('s2b')) $('s2b').scrollTop=keepS; klapStap2();
   const B=$('s2'), snap=s2Snap;
   B.querySelectorAll('[data-s2k]').forEach(x=>x.onclick=e=>{ e.stopPropagation(); const id=x.dataset.s2k; s2Vink(id); const k=$('s2').querySelector('[data-s2k="'+CSS.escape(id)+'"]'); if(k) k.focus({preventScroll:true}); });
   B.querySelectorAll('[data-s2t]').forEach(x=>{ x.onclick=()=>{ if(S2.cur===x.dataset.s2t) return; S2.cur=x.dataset.s2t; renderS2(); }; });
@@ -3308,6 +3324,7 @@ function updMini(){ const mb=$('minibar'); if(!mb) return; if(modelAan()&&curB!=
   $('mbR').innerHTML=Math.min(done+1,M.length)+'/'+M.length+' · <b>'+pc+'%</b>'; $('mbB').style.width=Math.max(pc,2)+'%'; }
 $('mbUp').onclick=()=>$('main').scrollTo({top:0,behavior:'smooth'});
 $('main').addEventListener('scroll',updMini,{passive:true});
+$('main').addEventListener('scroll',klapStap1,{passive:true});
 /* ---------------- afronden (beoordelaar) ---------------- */
 // na de laatste serie: eerst alle keuzes opslaan, dan de leverancier afronden (daarna kan een beoordelaar niets meer wijzigen)
 const AFGEROND={};
