@@ -1271,6 +1271,7 @@ body.swv #what{display:none}
     <button class="item" type="button" data-go="res">Resultaten en Excel</button>
     <button class="item" type="button" id="mName">Naam wijzigen</button>
     <button class="item" type="button" id="mUsers" hidden>Gebruikers</button>
+    <button class="item" type="button" id="mReset" hidden>Mijn keuzes wissen</button>
     <button class="item" type="button" id="mHelp">Hoe werkt het?</button>
     <p class="note" id="mInfo"></p>
   </div>
@@ -1287,6 +1288,18 @@ body.swv #what{display:none}
       <button class="cta" type="submit">Verder</button>
     </div>
   </form>
+</div>
+<div class="modal" id="resetModal" hidden>
+  <div class="box">
+    <h2>Mijn keuzes wissen</h2>
+    <p class="note" id="resetTxt"></p>
+    <div class="row2" style="display:grid;gap:8px">
+      <button type="button" class="cta" id="resetSup"></button>
+      <button type="button" class="ghost" id="resetAll">Alle leveranciers</button>
+      <button type="button" class="ghost" id="resetNo">Annuleren</button>
+    </div>
+    <p class="note" id="resetMsg" hidden></p>
+  </div>
 </div>
 <div class="modal" id="usersModal" hidden>
   <div class="box gbox">
@@ -1510,6 +1523,12 @@ const docId=()=>me.key+'--'+SUP.id;
 function lkey(){return 'blom-ck-'+LSV+(me?me.key:'anon')+'-'+(SUP?SUP.id:'')}
 function loadLocal(){try{return JSON.parse(ls.get(lkey())||'{}')||{}}catch(e){return {}}}
 function saveLocal(){ls.set(lkey(),JSON.stringify(D))}
+// Wissen door een beheerder: het record in de database krijgt c = {_gewist:{t}}. Keuzes die een ander apparaat nog lokaal
+// bewaart en die ouder zijn dan dat moment, worden daar weggegooid in plaats van teruggezet. '_gewist' is geen serie.
+const GEWIST='_gewist';
+function gewistOp(c){ return (c&&c[GEWIST]&&c[GEWIST].t)||''; }
+function schoonOp(d,c){ const g=gewistOp(c); let ch=false; if(d[GEWIST]){ delete d[GEWIST]; ch=true; } if(!g) return ch;
+  for(const k in d){ if((d[k]&&d[k].t||'')<=g){ delete d[k]; ch=true; } } return ch; }
 let pending={}, writing=false, exists=null;
 async function flush(){
   if(writing||!col||!me||!SUP||canShare===false) return;
@@ -1547,7 +1566,7 @@ function subscribe(){
     if(!SUP||SUP.id!==sup) return;
     if(canShare===null) setShare(true);
     const t={}; snap.docs.forEach(d=>{const v=d.data(); if(v) t[d.id]=v}); TEAM=t;
-    if(me){ const mine=TEAM[docId()]; if(mine){ exists=true; let ch=false; for(const k in mine.c||{}){ const a=mine.c[k], b=D[k]; if(!b||(a.t||'')>(b.t||'')){ D[k]=a; ch=true } } if(ch) saveLocal(); } }
+    if(me){ const mine=TEAM[docId()]; if(mine){ exists=true; let ch=schoonOp(D,mine.c); for(const k in mine.c||{}){ if(k===GEWIST) continue; const a=mine.c[k], b=D[k]; if(!b||(a.t||'')>(b.t||'')){ D[k]=a; ch=true } } if(ch) saveLocal(); } }
     flush(); render(true);
   },()=>{});
 }
@@ -1624,7 +1643,7 @@ function progHtml(s,isCur,mine){ if(!me) return '';
 async function progOther(s){ const k=s.id; PROG[k]={busy:1};
   try{ const data=cache[k]||(cache[k]=await dfetch('data/'+k+'.json').then(r=>r.json()));
     let c={}; try{ c=JSON.parse(ls.get('blom-ck-'+me.key+'-'+k)||'{}')||{} }catch(e){}
-    if(col){ try{ const sn=await col.doc(me.key+'--'+k).get(); if(sn.exists){ const mc=(sn.data()||{}).c||{}; c=Object.assign({},c); for(const x in mc){ if(!c[x]||(mc[x].t||'')>(c[x].t||'')) c[x]=mc[x]; } } }catch(e){} }
+    if(col){ try{ const sn=await col.doc(me.key+'--'+k).get(); if(sn.exists){ const mc=(sn.data()||{}).c||{}; c=Object.assign({},c); schoonOp(c,mc); for(const x in mc){ if(x===GEWIST) continue; if(!c[x]||(mc[x].t||'')>(c[x].t||'')) c[x]=mc[x]; } } }catch(e){} }
     const r=counts(c,data.models); PROG[k]={d:r.w+r.n,t:data.models.length}; }
   catch(e){ PROG[k]={err:1}; }
   if(view==='home') renderHome(); }
@@ -2210,7 +2229,7 @@ function skipSerie(m){ const S=soortenVan(m); if(!S) return; if(!confirm('Alle '
   if(!r.soort&&r.s) S.forEach(c=>{ so[c]=legacySoort(m,r,c); });
   S.forEach(b=>{ if(!(so[b]&&so[b].s)) so[b]={s:'niet',t}; });
   record(m.id,serieUitSoorten(m,so)); stamp('niet'); after(m,curB,prev); }
-document.addEventListener('keydown',e=>{ if(e.target.closest('input,select,textarea')||!$('zoom').hidden||!$('nameModal').hidden||!$('form').hidden||!$('menu').hidden) return; if(view!=='swipe'||!cur) return;
+document.addEventListener('keydown',e=>{ if(e.target.closest('input,select,textarea')||!$('zoom').hidden||!$('nameModal').hidden||!$('resetModal').hidden||!$('form').hidden||!$('menu').hidden) return; if(view!=='swipe'||!cur) return;
   if(e.metaKey||e.ctrlKey||e.altKey) return;
   // sneltoetsen op het beginscherm van een serie: Enter = houden/opnemen, Delete = niet, Backspace = vorige
   if(e.key==='Enter'){ e.preventDefault(); e.stopImmediatePropagation(); if(!$('bYes').disabled) $('bYes').click(); return; }   // niet doorgeven: anders keurt het swipescherm meteen de eerste kaart goed
@@ -3358,13 +3377,43 @@ $('nameForm').addEventListener('submit',e=>{
   const anon=me?null:D; me={key:keyOf(n),name:n}; ls.set('blom-ck-naam',n);
   if(SUP){
     const loc=loadLocal(); D=Object.assign({},loc); if(anon) for(const k in anon) if(!D[k]) D[k]=anon[k];
-    const mine=TEAM[docId()]; if(mine) for(const k in mine.c||{}){ if(!D[k]||(mine.c[k].t||'')>(D[k].t||'')) D[k]=mine.c[k]; }
+    const mine=TEAM[docId()]; if(mine){ schoonOp(D,mine.c); } if(mine) for(const k in mine.c||{}){ if(k===GEWIST) continue; if(!D[k]||(mine.c[k].t||'')>(D[k].t||'')) D[k]=mine.c[k]; }
     exists=mine?true:null; pending={}; for(const k in D) if(!mine||!mine.c||!mine.c[k]||mine.c[k].t!==D[k].t) pending[k]=D[k];
     saveLocal(); flush();
   }
   hist=[]; $('nameModal').hidden=true; render(); if(afterName){const f=afterName; afterName=null; f();}
 });
 $('who').onclick=()=>$('menuBtn').click();
+
+/* ---------------- eigen keuzes wissen (beheerder) ---------------- */
+// Een beheerder kan zijn eigen keuzes wissen, voor de huidige leverancier of voor alle leveranciers, in de versie waarin hij werkt
+// (test of live). Het record blijft staan met alleen het wismoment; lokaal bewaarde keuzes en concepten op dit apparaat gaan ook weg.
+async function wisMijnKeuzes(sups){
+  if(!BEH()||!me) return;
+  const msg=$('resetMsg'); msg.hidden=false; msg.textContent='Bezig met wissen…';
+  ['resetSup','resetAll','resetNo'].forEach(i=>$(i).disabled=true);
+  const now=new Date().toISOString(), fout=[];
+  if(SUP&&sups.includes(SUP.id)){ pending={}; }
+  for(const sid of sups){
+    if(col){ try{ const ref=col.doc(me.key+'--'+sid), sn=await ref.get();
+      if(sn.exists) await ref.set({naam:me.name,sup:sid,c:{[GEWIST]:{t:now}},laatst:now}); }catch(e){ fout.push(sid); continue; } }
+    try{ localStorage.removeItem('blom-ck-'+LSV+me.key+'-'+sid); localStorage.removeItem('blom-ck-draft-'+LSV+me.key+'-'+sid); if(!LSV) localStorage.removeItem('blom-ck-'+me.key+'-'+sid); }catch(e){}
+    delete PROG[sid];
+  }
+  if(SUP&&sups.includes(SUP.id)&&!fout.includes(SUP.id)){ D={}; DR={}; hist=[]; forced=null; forcedB=null; cur=null; if(TEAM[docId()]) TEAM[docId()]=Object.assign({},TEAM[docId()],{c:{[GEWIST]:{t:now}}}); }
+  ['resetSup','resetAll','resetNo'].forEach(i=>$(i).disabled=false);
+  if(fout.length){ msg.textContent='Wissen is niet gelukt voor '+fout.map(id=>(SUPS.find(x=>x.id===id)||{name:id}).name).join(', ')+'. Herlaad de pagina en probeer het opnieuw.'; render(); return; }
+  $('resetModal').hidden=true; msg.hidden=true;
+  toast(sups.length>1?'Je keuzes voor alle leveranciers zijn gewist.':'Je keuzes voor '+((SUPS.find(x=>x.id===sups[0])||{}).name||'')+' zijn gewist.',3200);
+  show('home');
+}
+$('mReset').onclick=()=>{ $('menu').hidden=true; if(!me) return;
+  $('resetTxt').textContent='Je eigen keuzes ('+me.name+') worden gewist in de '+(OP_LIVE?'live versie':'testversie')+'. Keuzes van anderen blijven staan. Dit kan niet ongedaan worden gemaakt.';
+  $('resetSup').textContent='Alleen '+(SUP?SUP.name:'deze leverancier'); $('resetSup').hidden=!SUP;
+  $('resetMsg').hidden=true; $('resetModal').hidden=false; };
+$('resetSup').onclick=()=>{ if(SUP) wisMijnKeuzes([SUP.id]); };
+$('resetAll').onclick=()=>{ wisMijnKeuzes(SUPS.map(x=>x.id)); };
+$('resetNo').onclick=()=>{ $('resetModal').hidden=true; };
 
 /* ---------------- boot ---------------- */
 // Alle keuzes van live zijn gewist (5 november 2026). De keuzes die deze browser nog lokaal bewaart,
@@ -3395,7 +3444,7 @@ function wisLokaleKeuzesPersoon(){
 }
 window.__blomBoot=async function boot(){
   wisLokaleKeuzes(); wisLokaleKeuzesPersoon();
-  document.body.classList.toggle('beoordelaar',!BEH()); document.body.classList.toggle('zonderprijzen',!PRIJS()); $('mUsers').hidden=!BEH();
+  document.body.classList.toggle('beoordelaar',!BEH()); document.body.classList.toggle('zonderprijzen',!PRIJS()); $('mUsers').hidden=!BEH(); $('mReset').hidden=!BEH();
   me=meVanAccount();
   if(!me){ const n=ls.get('blom-ck-naam')||ls.get('blom-swipe-naam'); if(n) me={key:keyOf(n),name:n}; }
   try{ const s=await dfetch('data/suppliers.json').then(r=>r.json()); SUPS=s.suppliers; LATER=s.later||[]; }catch(e){ $('supList').innerHTML='<p class="note">De leverancierslijst kon niet worden geladen. Herlaad de pagina.</p>'; return; }
