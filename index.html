@@ -1173,12 +1173,11 @@ body.swv #what{display:none}
 .mlh .eye{min-width:0}
 .mhint{margin:6px 0 0;text-align:center;font-size:11.5px;color:var(--g400)}
 .mcard .dvis{border-top:1px solid var(--n500)}
-/* vastgeplakte fotokaart ingeklapt tijdens scrollen: regel met code en labels weg, foto lager (stap 1 en stap 2) */
-.s1k.kl .s2cap,.s1k.kl .fmeld,.s1k.kl .s1zij{display:none}
-.ssoort>.s1k.kl .s1foto{height:170px!important}
-.s2b>.s1k.kl{flex:none}.s2b>.s1k.kl>.s2foto{flex:none;height:170px;min-height:0}
-.s1k.kl .s1foto img,.s1k.kl .s2foto img{top:8px!important;bottom:8px;height:calc(100% - 16px)!important}
-.s1k.kl .s1foto .dzoom{bottom:6px;right:46px}
+/* vastgeplakte fotokaart klapt geleidelijk in tijdens scrollen (klapZet): regel met code en labels weg, foto lager (stap 1 en stap 2) */
+/* geen automatische scrollcorrectie van de browser in deze scrollers: die zette de scrollpositie terug zodra de fotokaart begon te krimpen */
+#main,.s2b{overflow-anchor:none}
+.s1k .fmeld,.s1k .s1zij{transition:opacity .2s}
+.s1k.kl .fmeld,.s1k.kl .s1zij{opacity:0;pointer-events:none}
 /* telefoon: geen vastgeplakte fotokaart en in stap 2 schuift alles mee behalve de knoppen, anders blijft er op een telefoon maar een smalle strook over om te scrollen */
 @media (max-width:560px){
   .ssoort>.s1k{position:relative;top:auto;box-shadow:none;clip-path:none}
@@ -2073,14 +2072,33 @@ function setVi(m,i){
   const sec=$('sSwipe'), keep=$('main').scrollTop;
   sec.innerHTML=cardHTML(m); bindCard(m); $('main').scrollTop=keep;
 }
-// Fotokaart inklappen zodra je in de scroller (main bij stap 1, s2b bij stap 2) naar beneden scrolt; bovenaan weer uitklappen.
-// Het hoogteverschil komt als marge onder de kaart, zodat de inhoud eronder niet verspringt en het scrollen niet heen en weer klapt.
-function klapCheck(sc,k){ if(!sc||!k||!k.isConnected) return; if(getComputedStyle(k).position!=='sticky'){ if(k.classList.contains('kl')){ k.classList.remove('kl'); k.style.marginBottom=''; } return; }
-  const t=sc.scrollTop, kl=k.classList.contains('kl');
-  if(!kl&&t>30){ const h0=k.offsetHeight; k.classList.add('kl'); k.style.marginBottom=Math.max(0,h0-k.offsetHeight)+'px'; }
-  else if(kl&&t<8){ k.classList.remove('kl'); k.style.marginBottom=''; } }
-const klapStap1=()=>klapCheck($('main'),view==='swipe'&&$('sSwipe').querySelector('.ssoort>.s1k'));
-function klapStap2(){ const sb=$('s2b'); if(!sb) return; if(!sb._kl){ sb._kl=1; sb.addEventListener('scroll',()=>klapCheck(sb,sb.querySelector(':scope>.s1k')),{passive:true}); } klapCheck(sb,sb.querySelector(':scope>.s1k')); }
+// Fotokaart geleidelijk inklappen terwijl je in de scroller (main bij stap 1, s2b bij stap 2) naar beneden scrolt: over de eerste
+// pixels scrollen krimpt de foto naar 170 px en schuift de regel met code en labels dicht; terug naar boven gaat het net zo terug.
+// Het hoogteverschil komt als marge onder de kaart, zodat de inhoud eronder niet verspringt.
+const KLAP_MIN=170;
+function klapReset(k){ if(!k) return; const b=k._kb, f=k.querySelector('.s1foto,.s2foto'), c=k.querySelector('.s2cap');
+  if(f){ ['flex','minHeight'].forEach(x=>f.style[x]=''); if(b) f.style.height=b.fi; }
+  if(c) ['maxHeight','overflow','opacity','paddingTop','paddingBottom','boxSizing'].forEach(x=>c.style[x]='');
+  k.style.flex=''; k.style.marginBottom=''; k.classList.remove('kl'); delete k._kb; }
+function klapZet(sc,k){ if(!sc||!k||!k.isConnected) return; const f=k.querySelector('.s1foto,.s2foto'), c=k.querySelector('.s2cap'); if(!f) return;
+  if(getComputedStyle(k).position!=='sticky'){ if(k._kb) klapReset(k); return; }
+  if(!k._kb){ const cs=c&&getComputedStyle(c); k._kb={f:f.offsetHeight, c:c?c.offsetHeight:0, h:k.offsetHeight, fi:f.style.height, s2:k.parentNode.classList.contains('s2b'), pt:cs?parseFloat(cs.paddingTop):0, pb:cs?parseFloat(cs.paddingBottom):0}; }
+  const b=k._kb, R=Math.max(0,b.f-KLAP_MIN)+b.c; if(!R) return;
+  const p=Math.max(0,Math.min(1,sc.scrollTop/R)), q=1-p, fh=Math.round(b.f-p*Math.max(0,b.f-KLAP_MIN));
+  // marge eerst zetten (uitgerekend, niet gemeten): anders is de pagina heel even korter en kapt de browser de scrollpositie af
+  k.style.marginBottom=p?((b.f-fh)+b.c*p)+'px':'';
+  if(b.s2){ k.style.flex=p?'none':''; f.style.flex=p?'none':''; f.style.minHeight=p?'0':''; }
+  f.style.height=p?fh+'px':b.fi;
+  if(c){ if(p){ c.style.boxSizing='border-box'; c.style.overflow='hidden'; c.style.maxHeight=(b.c*q)+'px'; c.style.paddingTop=(b.pt*q)+'px'; c.style.paddingBottom=(b.pb*q)+'px'; c.style.opacity=String(Math.max(0,1-p*1.8)); }
+    else ['maxHeight','overflow','opacity','paddingTop','paddingBottom','boxSizing'].forEach(x=>c.style[x]=''); }
+  k.classList.toggle('kl',p>.5); }
+// per beeldje hoogstens één keer rekenen
+function klapRaf(fn){ if(fn._r) return; fn._r=requestAnimationFrame(()=>{ fn._r=0; fn(); }); }
+const k1=()=>view==='swipe'&&$('sSwipe').querySelector('.ssoort>.s1k'), k2=()=>{ const sb=$('s2b'); return sb&&sb.querySelector(':scope>.s1k'); };
+const klapStap1=()=>klapZet($('main'),k1());
+const klapStap1Raf=()=>klapRaf(klapStap1);
+function klapStap2(){ const sb=$('s2b'); if(!sb) return; if(!sb._kl){ sb._kl=1; const f=()=>klapZet($('s2b'),k2()); sb.addEventListener('scroll',()=>klapRaf(f),{passive:true}); } klapZet(sb,k2()); }
+window.addEventListener('resize',()=>{ const a=k2(); if(a){ klapReset(a); klapStap2(); } });
 // alles boven de vouw laten passen: de foto krijgt de hoogte die overblijft (tussen 150 en 380 px)
 function fitFotoMeld(box){ const n=box&&box.querySelector('.fmeld'), im=box&&box.querySelector('img'); if(!n||!im) return;
   im.style.height=''; const top=parseFloat(getComputedStyle(im).top)||0, onder=box.getBoundingClientRect().bottom-n.getBoundingClientRect().top+4; im.style.height='calc(100% - '+Math.round(top+onder)+'px)'; }
@@ -2091,7 +2109,7 @@ function fitFold(fo){ const mh=$('main').clientHeight; fo.style.minHeight=''; co
   if(!ph) return;   // seriekaart met modellen: eigen fotohoogte, niets oprekken
   ph.style.minHeight='0'; ph.style.height='0px'; const rest=fo.offsetHeight; ph.style.height=Math.max(150,Math.min(380,mh-rest-2))+'px';
   fo.style.minHeight=mh+'px'; }
-window.addEventListener('resize',()=>{ const fo=view==='swipe'&&$('sSwipe').querySelector('.fold'); if(fo) fitFold(fo); });
+window.addEventListener('resize',()=>{ const fo=view==='swipe'&&$('sSwipe').querySelector('.fold'); if(fo){ klapReset(k1()); fitFold(fo); klapStap1(); } });
 // vaste prijsregel boven de knoppen (seriekaart met modellen): zelfde rij als stap 2 (modelPrijs = vanaf-prijs, goedkoopste stofgroep)
 let hbOpen=false;
 // prijslint van de uitvoering op de foto (stap 1 en stap 2): kopregel met code en stofgroep, vier vakken, en de hele berekening als paneel erboven
@@ -3324,7 +3342,7 @@ function updMini(){ const mb=$('minibar'); if(!mb) return; if(modelAan()&&curB!=
   $('mbR').innerHTML=Math.min(done+1,M.length)+'/'+M.length+' · <b>'+pc+'%</b>'; $('mbB').style.width=Math.max(pc,2)+'%'; }
 $('mbUp').onclick=()=>$('main').scrollTo({top:0,behavior:'smooth'});
 $('main').addEventListener('scroll',updMini,{passive:true});
-$('main').addEventListener('scroll',klapStap1,{passive:true});
+$('main').addEventListener('scroll',klapStap1Raf,{passive:true});
 /* ---------------- afronden (beoordelaar) ---------------- */
 // na de laatste serie: eerst alle keuzes opslaan, dan de leverancier afronden (daarna kan een beoordelaar niets meer wijzigen)
 const AFGEROND={};
