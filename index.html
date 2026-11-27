@@ -2502,7 +2502,8 @@ function tegelFoto(m,t,cur){ const rk=v=>fotoVan(m,v)?(FOTO_RANK[v.imgq]||0):-1;
 const FMELD_ICO='<svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.5 15 14H1L8 1.5Z" fill="none" stroke="#c98a1a" stroke-width="1.5" stroke-linejoin="round"/><path d="M8 6v4" stroke="#4d3300" stroke-width="1.5"/><circle cx="8" cy="12" r=".9" fill="#4d3300"/></svg>';
 // Fotomelding: alleen op basis van Supabase (herkomst_foto per artikel, met foto_klopt_pct); de eigen markering van de app telt niet.
 // Eén melding tegelijk, in deze volgorde (nooit op de tegels, geen melding bij alleen stofkleur of afwerking = dezelfde tegel):
-// a. 'Foto is van artikel X, niet van Y': andere uitvoering op de foto (korte naam van X)
+// a. 'Foto is van artikel X, niet van Y' of een algemene seriefoto van een ander artikel: geen melding meer
+//    (de melding 'andere uitvoering op de foto (...)' is op 27 november 2026 vervallen)
 // b. zelfde foto (zelfde beeld) bij een andere uitvoering van hetzelfde model, en de foto hoort niet aantoonbaar bij deze uitvoering:
 //    dezelfde foto als [code waar de foto bij hoort, of de eerste in de reeks]
 // c. foto uit de prijslijst of algemene seriefoto, bij een model met meer uitvoeringen: foto toont het model, niet deze uitvoering
@@ -2519,13 +2520,10 @@ function fotoMelding(m,cur,pv){ const geen={html:'',code:cur.code}; if(!pv||!fot
   const meld=t=>({code:cur.code, html:'<div class="fmeld" role="note">'+FMELD_ICO+'<span><b>Let op:</b> '+t+'</span></div>'});
   const kortVan=x=>{ if(x.kort) return x.kort; const e=tv(x); return e?(e.g.tl[e.t.main]||x.code):x.code; };
   const ra=hf.match(/^Foto is van artikel ([^,\s]+),? niet van/);
-  if(ra){ const x=m.v.find(y=>y.code===ra[1]), tx=tv(x); if(x&&tx&&tc&&tx.t===tc.t) return geen;
-    const naam=x&&tx&&tc&&tx.g===tc.g?kortVan(x):(((x&&x.type)||typeVan(ra[1])||'').toLowerCase()+' '+ra[1]).trim();
-    return meld('andere uitvoering op de foto ('+esc(naam)+')'); }
+  if(ra) return geen;   // 'andere uitvoering op de foto (...)' is vervallen (27 november 2026)
   const ral=hf.match(/^Algemene foto van de serie \(([^)]+)\)/), alc=ral&&!/onbekend/i.test(ral[1])?ral[1].trim():null;
   if(alc&&alc!==cur.code){ const x=m.v.find(y=>y.code===alc), tx=tv(x);
-    if(!(x&&tx&&tc&&tx.t===tc.t)){ const naam=x&&tx&&tc&&tx.g===tc.g?kortVan(x):((typeVan(alc)||'').toLowerCase()+' '+alc).trim();
-      return meld('andere uitvoering op de foto ('+esc(naam)+')'); } }
+    if(!(x&&tx&&tc&&tx.t===tc.t)) return geen; }
   const precies=/^Foto hoort bij precies dit artikelnummer|^Foto staat op \S+ bij dit artikelnummer/.test(hf);
   // prijslijstfoto uit de kolom van het eigen artikelnummer hoort bij de uitvoering zelf (zoals 'precies dit artikel')
   const kolom=(hf.match(/in de kolom van (.+?)\s*$/)||[])[1], eigenKolom=!!kolom&&kolom.trim()===String(pv.code).trim();
